@@ -1,0 +1,489 @@
+## Global Variables
+vThreads = 40
+
+vPond = ["algae52"] ## INPUT IDENTIFIER
+
+## Pipeline, outputs
+vOutdir              = "/projects/bgmp/shared/groups/2020/algae/personal_sam/pipeline_metagenomics/snakemake_2.0_WIP/results/"
+vOutdir_fastp        = vOutdir + "fastp/"
+vOutdir_samtools_1   = vOutdir + "samtools/1_oceana/"
+vOutdir_metaspades   = vOutdir + "metaspades/"
+vOutdir_quast        = vOutdir + "quast/"
+vOutdir_maxbin2      = vOutdir + "maxbin2/"
+vOutdir_mapping      = vOutdir + "mapping/"
+vOutdir_metabat2     = vOutdir + "metabat2/"
+vOutdir_concoct      = vOutdir + "concoct/"
+vOutdir_bin3c        = vOutdir + "bin3c/"
+vOutdir_dastool      = vOutdir + "dastool/"
+vOutdir_gtdbtk       = vOutdir + "gtdbtk/"
+vOutdir_checkm       = vOutdir + "checkm/"
+
+## Pipeline, inputs
+vInput_fastp      = "/projects/bgmp/shared/groups/2020/algae/data_raw/"
+
+## Pipeline, Resources
+vRsrc             = "/projects/bgmp/shared/groups/2020/algae/personal_sam/pipeline_metagenomics/snakemake_2.0_WIP/resources/"
+vRsrc_ref_oceana  = vRsrc + "ref_seq_oceana/"
+vRsrc_gtdbtk_data = vRsrc + "release95/"
+vFunc_FormatBin3c = vRsrc + "custom_scripts/bin3c_for_dastool.py"
+
+## Initialize outputs
+rule all:
+    input:
+        expand(vOutdir_quast + "{pond}_sho", pond=vPond),   ## Quast
+        expand(vOutdir_gtdbtk + "{pond}/", pond=vPond),     ## gtdbtk
+        expand(vOutdir_checkm + "{pond}/", pond=vPond),     ## checkm
+
+## 01 - Read Processing, fastp
+rule fastp:
+    """
+    > Function: Removes adapters and low-quality reads.
+    """
+    input:
+        r1_sho = expand(vInput_fastp + "{pond}/sho/{pond}_sho_R1.fastq.gz", pond=vPond), ## R1 Input
+        r2_sho = expand(vInput_fastp + "{pond}/sho/{pond}_sho_R2.fastq.gz", pond=vPond), ## R2 Input
+        
+        r1_hic = expand(vInput_fastp + "{pond}/hic/{pond}_hic_R1.fastq.gz", pond=vPond), ## R1 Input
+        r2_hic = expand(vInput_fastp + "{pond}/hic/{pond}_hic_R2.fastq.gz", pond=vPond), ## R2 Input
+    output:
+        r1_sho = vOutdir_fastp + "{pond}/sho/{pond}_sho_R1.fastq.gz",   ## R1 Output
+        r2_sho = vOutdir_fastp + "{pond}/sho/{pond}_sho_R2.fastq.gz",   ## R2 Output
+        vH_sho = vOutdir_fastp + "summary/{pond}_sho_summary.html",     ## HTML Summary
+        vJ_sho = vOutdir_fastp + "summary/{pond}_sho_summary.json",     ## JSON Summary
+
+        r1_hic = vOutdir_fastp + "{pond}/hic/{pond}_hic_R1.fastq.gz",   ## R1 Output
+        r2_hic = vOutdir_fastp + "{pond}/hic/{pond}_hic_R2.fastq.gz",   ## R2 Output
+        vH_hic = vOutdir_fastp + "summary/{pond}_hic_summary.html",     ## HTML Summary
+        vJ_hic = vOutdir_fastp + "summary/{pond}_hic_summary.json",     ## JSON Summary
+    conda:
+        "envs/env_1.yaml"
+    shell:
+        """
+        ## Data: Shotgun
+        /usr/bin/time -v fastp -i {input.r1_sho} -I {input.r2_sho} -o {output.r1_sho} -O {output.r2_sho} -h {output.vH_sho} -j {output.vJ_sho}
+        
+        ## Data: Hi-C
+        /usr/bin/time -v fastp -i {input.r1_hic} -I {input.r2_hic} -o {output.r1_hic} -O {output.r2_hic} -h {output.vH_hic} -j {output.vJ_hic}
+        """
+
+## 01 - Read Processing, bwa mem & samtools
+rule bwa_samtools_1:
+    """
+    > Function: Align reads to reference genomes N. oceana then extract unmapped reads with samtools. We are not interested in reads mapped to algae.
+    """
+    input:
+        ## Reference Genomes
+        ref_oceana = vRsrc_ref_oceana + "ref_seqs.fa",
+        ## Shotgun
+        sho_r1 = expand(vOutdir_fastp + "{pond}/sho/{pond}_sho_R1.fastq.gz", pond=vPond),
+        sho_r2 = expand(vOutdir_fastp + "{pond}/sho/{pond}_sho_R2.fastq.gz", pond=vPond),
+        ## Hi-C
+        hic_r1 = expand(vOutdir_fastp + "{pond}/hic/{pond}_hic_R1.fastq.gz", pond=vPond),
+        hic_r2 = expand(vOutdir_fastp + "{pond}/hic/{pond}_hic_R2.fastq.gz", pond=vPond),
+    output:
+        ## Shotgun
+        sho_r1 = vOutdir_samtools_1 + "{pond}/sho/unmapped_{pond}_sho_R1.fastq.gz",
+        sho_r2 = vOutdir_samtools_1 + "{pond}/sho/unmapped_{pond}_sho_R2.fastq.gz",
+        ## Hi-C
+        hic_r1 = vOutdir_samtools_1 + "{pond}/hic/unmapped_{pond}_hic_R1.fastq.gz",
+        hic_r2 = vOutdir_samtools_1 + "{pond}/hic/unmapped_{pond}_hic_R2.fastq.gz"
+    conda:
+        "envs/env_1.yaml"
+    threads:
+        vThreads
+    shell:
+        """
+        ## Generate Index files for N. Oceana reference sequence genome
+        bwa index {input.ref_oceana}
+
+        ## Align Data: Shotgun
+        /usr/bin/time -v bwa mem -t {threads} {input.ref_oceana} {input.sho_r1} {input.sho_r2} | \
+        /usr/bin/time -v samtools view -@ {threads} -S -b - | \
+        /usr/bin/time -v samtools view -@ {threads} -b -f 4 - | \
+        /usr/bin/time -v samtools sort -@ {threads} -n - | \
+        /usr/bin/time -v samtools fastq -@ {threads} -1 {output.sho_r1} -2 {output.sho_r2} -0 /dev/null -s /dev/null -n -
+        
+        ## Align Data: Hi-C
+        /usr/bin/time -v bwa mem -5SP -t {threads} {input.ref_oceana} {input.hic_r1} {input.hic_r2} | \
+        /usr/bin/time -v samtools view -@ {threads} -S -b - | \
+        /usr/bin/time -v samtools view -@ {threads} -b -f 4 - | \
+        /usr/bin/time -v samtools sort -@ {threads} -n - | \
+        /usr/bin/time -v samtools fastq -@ {threads} -1 {output.hic_r1} -2 {output.hic_r2} -0 /dev/null -s /dev/null -n -
+        """
+
+# 02 - Assembly, metaspades
+rule metaspades:
+    """
+    Function:   Produce metagenome assemblies of all shotgun populations
+    Parameters:
+        > --meta        Indicates that spades should be ran as metaspades
+        > -k            Specify kmer lengths to perform assembly with
+        > -1            Input Read 1
+        > -2            Input Read 2
+        > --threads     Number of threads to use
+        > -o            Output Directory
+    Input:      Nannochloropsis-free reads (.fastq.gz)
+    Output:     Shotgun assembly (format = scaffolds.fasta)
+    """
+    input:
+        r1 = expand(vOutdir_samtools_1 + "{pond}/sho/unmapped_{pond}_sho_R1.fastq.gz", pond=vPond),
+        r2 = expand(vOutdir_samtools_1 + "{pond}/sho/unmapped_{pond}_sho_R2.fastq.gz", pond=vPond),
+    output:
+        vDir  = directory(vOutdir_metaspades + "{pond}_sho"),
+        vFile = vOutdir_metaspades + "{pond}_sho/scaffolds.fasta",
+        vR1 = vOutdir_metaspades + "{pond}_sho/corrected/R1.fastq.gz",
+        vR2 = vOutdir_metaspades + "{pond}_sho/corrected/R2.fastq.gz",
+        vCorDir = directory(vOutdir_metaspades + "{pond}_sho/corrected/"),
+    conda:
+        "envs/env_1.yaml"
+    threads:
+        vThreads
+    shell:
+        """
+        /usr/bin/time -v spades.py --meta \
+        -k 21,33,55,77,99,127 \
+        --threads {threads} \
+        -1 {input.r1} \
+        -2 {input.r2} \
+        -o {output.vDir}
+
+        ## Rename Corrected Read Files
+        mv {output.vCorDir}*R1*.fastq.gz {output.vCorDir}R1.fastq.gz
+        mv {output.vCorDir}*R2*.fastq.gz {output.vCorDir}R2.fastq.gz
+        """
+
+## 02 - Assembly, QUAST
+rule quast:
+    input:
+        expand(vOutdir_metaspades + "{pond}_sho/scaffolds.fasta", pond=vPond),
+    output:
+        directory(vOutdir_quast + "{pond}_sho")
+    conda:
+        "envs/env_2.yaml"
+    threads:
+        vThreads
+    shell:
+        """
+        /usr/bin/time -v metaquast \
+        --threads {threads} \
+        -o {output} \
+        {input}
+        """
+
+## 03 - Binning, MaxBin2
+rule maxbin2:
+    """
+    Function:   Take MAG and group genomes using _.
+    Resources:
+        > https://sourceforge.net/projects/maxbin2/files/
+    """
+    input:
+        contigs = expand(vOutdir_metaspades + "{pond}_sho/scaffolds.fasta", pond=vPond),
+        r1 = expand(vOutdir_metaspades + "{pond}_sho/corrected/R1.fastq.gz", pond=vPond),
+        r2 = expand(vOutdir_metaspades + "{pond}_sho/corrected/R2.fastq.gz", pond=vPond),
+    output:
+        vOut = directory(vOutdir_maxbin2 + "{pond}_sho/"), ## Defined only
+    conda:
+        "envs/env_1.yaml"
+    threads:
+        vThreads
+    shell:
+        """
+        /usr/bin/time -v run_MaxBin.pl \
+        -contig {input.contigs} \
+        -out {output.vOut}bin \
+        -reads {input.r1} \
+        -reads2 {input.r2} \
+        -thread {threads}
+        """
+
+# 03 - Binning, Generate alignment (used by MetaBat2 and CONCOCT)
+rule align_assembly_sho:
+    """
+    Function:
+        1. Copy metagenome assemblies into a new directory, where they are indexed.
+        2. Generate sho alignment BAM files for use with MetaBat2 and CONCOCT
+        3. The MetaBat2 "depth" file is created
+    Resources:
+        > https://onestopdataanalysis.com/binning/
+    """
+    input:
+        vRef     = expand(vOutdir_metaspades + "{pond}_sho/scaffolds.fasta", pond=vPond),
+        vR1_sho = expand(vOutdir_metaspades + "{pond}_sho/corrected/R1.fastq.gz", pond=vPond),
+        vR2_sho = expand(vOutdir_metaspades + "{pond}_sho/corrected/R2.fastq.gz", pond=vPond),
+    output:
+        vDir_index     = directory(vOutdir_mapping + "index/{pond}_sho/"),
+        vIndex         =           vOutdir_mapping + "index/{pond}_sho/scaffolds.fasta",
+        vAlignment_sho =           vOutdir_mapping + "alignment/{pond}_sho.bam",
+        vDepth         =           vOutdir_mapping + "depth/{pond}_depth.txt"
+    conda:
+        "envs/env_1.yaml"
+    threads:
+        vThreads
+    shell:
+        """
+        ## 1.
+        mkdir -p {output.vDir_index}
+        cp {input.vRef} {output.vIndex}
+        /usr/bin/time -v bwa index {output.vIndex}
+
+        ## 2.
+        /usr/bin/time -v bwa mem -t {threads} {output.vIndex} {input.vR1_sho} {input.vR2_sho} \
+            | /usr/bin/time -v samtools sort -@ {threads} -o {output.vAlignment_sho}
+        /usr/bin/time -v samtools index -@ {threads} {output.vAlignment_sho}
+
+        ## 3.
+        /usr/bin/time -v jgi_summarize_bam_contig_depths --outputDepth {output.vDepth} {output.vAlignment_sho}
+        """
+
+# 03 - Binning, Generate alignment (used by Bin3c)
+rule align_assembly_hic:
+    """
+    Function: Generate hic alignment BAM files for use with Bin3c
+    """
+    input:
+        vRef     = expand(vOutdir_metaspades + "{pond}_sho/scaffolds.fasta", pond=vPond),
+        vR1_hic  = expand(vOutdir_fastp      + "{pond}/hic/{pond}_hic_R1.fastq.gz", pond=vPond),
+        vR2_hic  = expand(vOutdir_fastp      + "{pond}/hic/{pond}_hic_R2.fastq.gz", pond=vPond),
+        vIndex   = expand(vOutdir_mapping    + "index/{pond}_sho/scaffolds.fasta", pond=vPond),
+    output:
+        vAlignment_hic = vOutdir_mapping + "alignment/{pond}_hic.bam",
+    conda:
+        "envs/env_1.yaml"
+    threads:
+        vThreads
+    shell:
+        """
+        /usr/bin/time -v bwa mem -t {threads} -5SP {input.vIndex} {input.vR1_hic} {input.vR2_hic} \
+            | /usr/bin/time -v samtools view -@ {threads} -Sb - \
+            | /usr/bin/time -v samtools sort -@ {threads} -o {output.vAlignment_hic} -n -
+        """
+            
+## 03 - Binning, MetaBat2
+rule metabat2:
+    """
+    Function: 
+    Notes:
+        > Double brackets ({{}}) used to escape bracket character in snakemake.
+    """
+    input:
+        vAssembly  = expand(vOutdir_metaspades + "{pond}_sho/scaffolds.fasta", pond=vPond),
+        vDepth     = expand(vOutdir_mapping + "depth/{pond}_depth.txt", pond=vPond),
+    output:
+        directory(vOutdir_metabat2 + "{pond}_sho/"),
+    conda:
+        "envs/env_1.yaml"
+    threads:
+        vThreads
+    shell:
+        """
+        /usr/bin/time -v metabat2 -t {threads} -i {input.vAssembly} -a {input.vDepth} -o {output}
+
+        find {output} -type f -name '.*' -execdir sh -c 'mv -i "$0" "./${{0#./.}}"' {{}} \;
+        """
+
+## 03 - Binning, CONCOCT
+rule concoct:
+    """
+    Resources:
+        > https://onestopdataanalysis.com/binning/
+    """
+    input:
+        vScaffold  = expand(vOutdir_metaspades + "{pond}_sho/scaffolds.fasta", pond=vPond),
+        vAlignment = expand(vOutdir_mapping + "alignment/{pond}_sho.bam", pond=vPond),
+    output:
+        vDir  = directory(vOutdir_concoct + "{pond}_sho/"),
+        vBins = directory(vOutdir_concoct + "{pond}_sho/fasta_bins"), ## Defined only
+    conda:
+        "envs/env_3_concoct.yaml"
+    threads:
+        vThreads
+    shell:
+        """
+        mkdir {output.vDir}/fasta_bins
+
+        /usr/bin/time -v cut_up_fasta.py {input.vScaffold} -c 10000 -o 0 --merge_last -b {output.vDir}/contigs_10K.bed \
+            > {output.vDir}/contigs_10K.fa
+
+        /usr/bin/time -v concoct_coverage_table.py {output.vDir}/contigs_10K.bed {input.vAlignment} \
+            > {output.vDir}/coverage_table.tsv
+
+        /usr/bin/time -v concoct --threads {threads} --composition_file {output.vDir}/contigs_10K.fa --coverage_file {output.vDir}/coverage_table.tsv -b {output.vDir}
+
+        /usr/bin/time -v merge_cutup_clustering.py {output.vDir}/clustering_gt1000.csv \
+            > {output.vDir}/clustering_merged.csv
+
+        /usr/bin/time -v extract_fasta_bins.py {input.vScaffold} {output.vDir}/clustering_merged.csv --output_path {output.vDir}/fasta_bins
+        """
+
+## 03 - Binning, Bin3c
+rule bin3c:
+    """
+    Notes
+        > Walk-through: https://github.com/cerebis/bin3C
+        > Environment Info: https://github.com/cerebis/proxigenomics_toolkit/blob/master/Pipfile
+        > Environment Info: See github bin3C pipfile
+    """
+    input:
+        vScaffold      = expand(vOutdir_metaspades + "{pond}_sho/scaffolds.fasta", pond=vPond),
+        vAlignment_hic = expand(vOutdir_mapping + "alignment/{pond}_hic.bam", pond=vPond),
+    output:
+        vDir = directory(vOutdir_bin3c + "{pond}"),
+        vDef = directory(vOutdir_bin3c + "{pond}/fasta/"), # Define only
+    conda:
+        "envs/env_4_bin3c.yaml"
+    threads:
+        vThreads
+    shell:
+        """
+        ## Install bin3c
+        git clone --recursive https://github.com/cerebis/bin3C
+
+        ## Run Bin3c, 
+        /usr/bin/time -v python bin3C/bin3C.py mkmap -e MluCI -e Sau3AI -v {input.vScaffold} {input.vAlignment_hic} map
+        
+        rm -r {output.vDir}
+        /usr/bin/time -v python bin3C/bin3C.py cluster -v map/contact_map.p.gz {output.vDir}
+
+        rm -r bin3C map
+        """
+
+rule dastool_tables:
+    """
+    Function: For each binning output, create a .tsv file associating bins with scaffolds
+    """
+    input:
+        vIn_Maxbin2  = expand(vOutdir_maxbin2  + "{pond}_sho/", pond=vPond),
+        vIn_Metabat2 = expand(vOutdir_metabat2 + "{pond}_sho/", pond=vPond),
+        vIn_Concoct  = expand(vOutdir_concoct  + "{pond}_sho/fasta_bins", pond=vPond),
+        vIn_Bin3c    = expand(vOutdir_bin3c    + "{pond}/fasta/", pond=vPond),
+    output:
+        vOut_Maxbin2  = vOutdir_dastool + "table/{pond}/maxbin.scaffolds2bin.tsv",
+        vOut_Metabat2 = vOutdir_dastool + "table/{pond}/metabat.scaffolds2bin.tsv",
+        vOut_Concoct  = vOutdir_dastool + "table/{pond}/concoct.scaffolds2bin.tsv",
+        vOut_Bin3c    = vOutdir_dastool + "table/{pond}/bin3c.scaffolds2bin.tsv",
+    conda:
+        "envs/env_5_dastool.yaml"
+    threads:
+        vThreads
+    shell:
+        """
+        /usr/bin/time -v Fasta_to_Scaffolds2Bin.sh -i {input.vIn_Maxbin2}  -e fasta > {output.vOut_Maxbin2}
+        /usr/bin/time -v Fasta_to_Scaffolds2Bin.sh -i {input.vIn_Metabat2} -e fa    > {output.vOut_Metabat2}
+        /usr/bin/time -v Fasta_to_Scaffolds2Bin.sh -i {input.vIn_Concoct}  -e fa    > {output.vOut_Concoct}
+        /usr/bin/time -v Fasta_to_Scaffolds2Bin.sh -i {input.vIn_Bin3c}    -e fna   > {output.vOut_Bin3c}
+        """
+
+rule format_bin3c:
+    """
+    Justification:
+        > Due to the way bin3c formats its fasta headers, the `Fasta_to_Scaffolds2Bin` bin3c output is improperly formatted.
+        > This custom python script reformats the .tsv file to look similair to maxbin/metabat/concoct tables.
+    """
+    input:
+        vInfile = expand(vOutdir_dastool + "table/{pond}/bin3c.scaffolds2bin.tsv", pond=vPond),
+    output:
+        vOutdir_dastool + "table/{pond}/formatted_bin3c.scaffolds2bin.tsv",
+    conda:
+        "envs/env_5_dastool.yaml"
+    threads:
+        vThreads
+    shell:
+        """
+        python /projects/bgmp/shared/groups/2020/algae/personal_sam/pipeline_metagenomics/snakemake_2.0_WIP/resources/custom_scripts/bin3c_for_dastool.py --file {input.vInfile} --out {output}
+        """
+
+rule dastool_predict:
+    """
+    Notes
+        > Search engine "diamond" used for its easy conda installation
+    """
+    input:
+        vScaffold    = expand(vOutdir_metaspades + "{pond}_sho/scaffolds.fasta", pond=vPond),
+        vIn_Maxbin2  = expand(vOutdir_dastool + "table/{pond}/maxbin.scaffolds2bin.tsv", pond=vPond),
+        vIn_Metabat2 = expand(vOutdir_dastool + "table/{pond}/metabat.scaffolds2bin.tsv", pond=vPond),
+        vIn_Concoct  = expand(vOutdir_dastool + "table/{pond}/concoct.scaffolds2bin.tsv", pond=vPond),
+        vIn_Bin3c    = expand(vOutdir_dastool + "table/{pond}/formatted_bin3c.scaffolds2bin.tsv", pond=vPond),
+    output:
+        vOut_sho_hic = directory(vOutdir_dastool + "prediction_sho_hic/{pond}/"),
+        vOut         = directory(vOutdir_dastool + "prediction_sho_hic/{pond}/_DASTool_bins/"), ## Define only
+    conda:
+        "envs/env_5_dastool.yaml"
+    threads:
+        vThreads
+    shell:
+        """
+        ## Run WITH Bin3c data
+        /usr/bin/time -v DAS_Tool \
+            -i {input.vIn_Maxbin2},{input.vIn_Metabat2},{input.vIn_Concoct},{input.vIn_Bin3c} \
+            -l maxbin2,metabat2,concoct,bin3c \
+            -c {input.vScaffold} \
+            --search_engine diamond \
+            --write_bins 1 \
+            --threads {threads} \
+            -o {output.vOut_sho_hic}
+        """
+
+rule gtdbtk:
+    """
+    Notes:
+        > GTDB-Tk requires ~27G of external data that needs to be downloaded and unarchived (performed in resources directory ahead of time):
+            $ wget https://data.ace.uq.edu.au/public/gtdb/data/releases/release95/95.0/auxillary_files/gtdbtk_r95_data.tar.gz
+            $ tar xvzf gtdbtk_r95_data.tar.gz
+    """
+    input:
+        expand(vOutdir_dastool + "prediction_sho_hic/{pond}/_DASTool_bins/", pond=vPond),
+    output:
+        directory(vOutdir_gtdbtk + "{pond}/"),
+    params:
+        vRsrc_gtdbtk_data
+    conda:
+        "envs/env_6_gtdbtk.yaml"
+    threads:
+        vThreads
+    shell:
+        """
+        GTDBTK_DATA_PATH={params} /usr/bin/time -v gtdbtk classify_wf \
+            --cpus {threads} \
+            --extension fa \
+            --genome_dir {input} \
+            --out_dir {output}
+        """
+
+rule checkm:
+    input:
+        vBins      = expand(vOutdir_dastool + "prediction_sho_hic/{pond}/_DASTool_bins/", pond=vPond),
+        vAlignment = expand(vOutdir_mapping + "alignment/{pond}_sho.bam", pond=vPond),
+    output:
+        vDir = directory(vOutdir_checkm + "{pond}/"),
+        vCov = vOutdir_checkm + "{pond}/coverage.tsv",
+        vPro = vOutdir_checkm + "{pond}/profile.tsv",
+        vSum = vOutdir_checkm + "{pond}/summary.tsv",
+    conda:
+        "envs/env_7_checkm.yaml"
+    threads:
+        vThreads
+    shell:
+        """
+        ## Generate Coverage Table
+        /usr/bin/time -v checkm coverage \
+            --threads {threads} \
+            --extension fa \
+            {input.vBins} \
+            {output.vCov} \
+            {input.vAlignment}
+        
+        ## Generate Mapping % Table
+        /usr/bin/time -v checkm profile \
+            --tab_table \
+            --file {output.vPro} \
+            {output.vCov}
+
+        ## Perform Taxonomic Classification
+        /usr/bin/time -v checkm lineage_wf \
+            --threads {threads} \
+            --extension fa \
+            --file {output.vSum} \
+            {input.vBins} \
+            {output.vDir}
+        """
