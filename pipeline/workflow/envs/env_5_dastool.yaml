@@ -1,0 +1,7 @@
+channels:
+  - defaults
+  - bioconda
+  - conda-forge
+dependencies:
+  - das_tool   =1.1.1
+  - diamond    =2.0.4

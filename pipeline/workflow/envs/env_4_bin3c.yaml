@@ -1,0 +1,23 @@
+channels:
+  - defaults
+  - bioconda
+  - conda-forge
+dependencies:
+  - perl
+  - python =2.7
+  - biopython
+  - python-louvain
+  - matplotlib <3
+  - networkx <2
+  - numba <=0.42.0
+  - numpy <1.15.0
+  - pandas
+  - pysam
+  - scipy
+  - seaborn
+  - sparse
+  - tqdm
+  - typing
+  - libuuid
+  - pip
+  - PyYAML <4
