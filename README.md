@@ -4,7 +4,7 @@ This pipeline is based in Snakemake and analyzes a multi-sample metagenomic data
 
 # Overview
 
-The data used in this pipeline is of four samples of the algal species *Nannochloropsis oceanica*, which is of significant interest as an alternative energy source due to its high fat content and minimal growth requirements. However, *N. oceanica* is easily susceptible to infection by pathogen(s) that are not yet identified. We are studying four samples, two of which represent healthy ponds, and two that represent sick ponds that are no longer viable for energy production. In this project we aim to identify the species present in each of the ponds, and upon comparison of the healthy and sick ponds, identify the possible pathogen(s).
+The data used in this pipeline consists of four samples of the algal species *Nannochloropsis oceanica*, which is of significant interest as an alternative energy source due to its high fat content and minimal growth requirements. However, *N. oceanica* is easily susceptible to infection by pathogen(s) that are not yet identified. We are studying four samples, two of which represent healthy ponds, and two that represent sick ponds that are no longer viable for energy production. In this project we aim to identify the species present in each of the ponds, and upon comparison of the healthy and sick ponds, identify the possible pathogen(s).
 
 # Usage Guide
 
