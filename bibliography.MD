@@ -26,6 +26,6 @@
 (11) Guo, L.; Liang, S.; Zhang, Z.; Liu, H.; Wang, S.; Pan, K.; Xu, J.; Ren, X.; Pei, S.; Yang, G. Genome Assembly of Nannochloropsis Oceanica Provides Evidence of Host Nucleus Overthrow by the Symbiont Nucleus during Speciation. Commun Biol 2019, 2 (1), 249. https://doi.org/10.1038/s42003-019-0500-9.
 
 
-# *Bdellovibrionota* Annotation
+# *Bdellovibrionota​* Annotation
 
 (12) Lee, P. A.; Martinez, K. J. L.; Letcher, P. M.; Corcoran, A. A.; Ryan, R. A. A Novel Predatory Bacterium Infecting the Eukaryotic Alga Nannochloropsis. Algal Research 2018, 32, 314–320. https://doi.org/10.1016/j.algal.2018.04.003.
