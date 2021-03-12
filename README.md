@@ -3,14 +3,8 @@
 This pipeline is based in Snakemake and analyzes a multi-sample metagenomic dataset of FASTQ reads, ultimately outputting graphs of both the taxonomic community profile and percentage abundances of species present. Here we showcase our pipeline through an analysis identfying a novel algal pathogen from algal-pond matagebomic samples.
 
 
-## Motivation
-
+## Motivation  
 Metagenomics poses unique and challenging problems in comparison to the standard study of single organism datasets, for which most sequencing platforms are designed. Hi-C proximity ligation allows for improved deconvolution of metagenomic sequencing data by providing information about the co-localization of sequences within a single cell. 
-
-
-## Try it yourself
-A generalized pipeline may be found here:
-https://github.com/Jonasgrove/meta_compare
 
 ## Data Overview
 
@@ -20,6 +14,11 @@ The data used in this pipeline consists of four samples of FASTQ read data of th
 ## Future Directions
 
 In order to make this pipleine usable for other metagenomic datasets, we aim to create an open-source UI that allows for input of the number of samples, the conditions of each sample, and the types of read data. The user will be able to recreate a similar metagenomic analysis by downloading the Snakemake pipeline and the required environments.
+
+
+## Try it yourself
+A generalized pipeline may be found here:
+https://github.com/Jonasgrove/meta_compare
 
 
 ## Acknowledgements
