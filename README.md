@@ -6,7 +6,7 @@ This pipeline is based in Snakemake and analyzes a multi-sample metagenomic data
 
 ## Repository Layout
 * The folder `pipeline` contains the snakemake-mediated pipeline used in our analysis. For a generalized pipeline that you can use, see the section "Try it yourself"
-* The folder `results` contains a graphic of the final quantified classification barcharts produced by this analysis as well as a write-up summary of our analysis.
+* The folder `results` contains a graphic of the final quantified classification barcharts produced by this analysis (`top_6_phyla.png`) as well as a write-up summary of our analysis.
 
 
 ## Motivation
